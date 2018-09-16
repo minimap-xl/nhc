@@ -1,0 +1,244 @@
+const uint8: NUMBER_OF_VERSIONS = 3;
+
+struct Replica_In {
+	   uint32: a;
+};
+
+struct Replica_Out {
+	   uint32: sum;
+};
+
+enum Member_ID
+{
+  MV
+};
+
+struct Comp_Vector{
+  Replica_Out: mem_res;
+  Member_ID: mem_id;
+};
+
+encapsulate_inputs(in uint32: a, out Replica_In: c)
+{
+  c.a = a;
+}
+
+unfold_inputs(in Replica_In: c, out uint32: a)
+{
+  a = c.a;
+}
+
+encapsulate_outputs(in uint32: sum, out Replica_Out: c)
+{
+  c.sum = sum;
+}
+
+unfold_outputs(in Replica_Out: c, out uint32: sum)
+{
+  sum = c.sum;
+}
+
+
+processdef Initiator(in uint32: a,
+					 out queue<Replica_In>: inputs, 
+                     in queue<Member_ID>: active_members)
+{
+  var Replica_In: tmp;
+  
+  state Main{
+    encapsulate_inputs(a, tmp);
+    
+    loop over active_members with it {
+      inputs.push(tmp);
+    }
+  }
+}
+
+processdef Member_Version(in queue<Replica_In>: input, 
+                          in Member_ID: member_id, 
+                          out queue<Comp_Vector>: output,
+                          out queue<Member_ID>: status)
+{
+  var uint32: a;
+  var uint32: sum;
+
+  var Replica_In: tmp_in;
+  var Replica_Out: tmp_out;
+  var Comp_Vector: my_result;
+
+  common{
+    tmp_in = input.pop();
+    unfold_inputs(tmp_in, a);
+
+  } 
+  
+  state Main{
+
+  } 
+
+  finally{   
+    encapsulate_outputs(sum, tmp_out);
+
+    my_result.mem_res = tmp_out;
+    my_result.mem_id = member_id;
+               
+    output.push(my_result);
+    status.push(member_id);
+  } 
+}
+
+struct Ballot_Grouping{
+  Replica_Out: value;
+  uint8: cnt;      
+};
+
+comp_ballot(in Replica_Out: a, in Replica_Out: b, out bool: match)
+{
+  if (a.sum == b.sum){
+    match = true;
+  } else {
+    match = false;
+  }  
+}
+
+Majority_Voting(in queue<Comp_Vector>: all_ballots,
+                out Ballot_Grouping: majority,
+                out queue<Ballot_Grouping>: vote_stats)
+{
+    var Ballot_Grouping: new_summary;
+  
+    var bool: match_found = false;  
+    
+	vote_stats.clear();
+    
+  	loop over all_ballots with one_vote
+    {
+      	match_found = false;
+      
+      	if (true == vote_stats.not_empty()) {
+          loop over vote_stats with it {
+            if (true == comp_ballot(one_vote.current.mem_res, it.current.value)){
+              it.current.cnt = it.current.cnt + 1;
+            
+			  /* Check whether the vote counter is greater than the 
+              maximum found so far. */
+              if (it.current.cnt > majority.cnt) {
+                majority.cnt = it.current.cnt;
+                majority.value= it.current.value;
+              }
+              match_found = true;
+              break;
+          	} 
+          }
+          
+          if(false == match_found){ 
+            new_summary.value= one_vote.current.mem_res;
+            new_summary.cnt = 1;
+            vote_stats.push(new_summary);
+          }
+          
+        } else {
+          new_summary.value = one_vote.current.mem_res;
+          new_summary.cnt = 1;
+          vote_stats.push(new_summary);
+        }
+      
+    }
+    
+    if (majority.cnt > uint8.as(all_ballots.count() / 2)) {
+      /* I: We should not access majority.value.sum here, because it is a placeholder
+         that goes away during model transformation.  More generally, I think
+	 we should not access any field of .value because the Replica_Out data
+	 type is opaque to Majority_Voting().  Only comp_ballot() knows
+	 what's inside it, because we transform it as needed.  Instead, we can
+	 copy .value safely because we only need the size to copy.
+
+      IO.println("Majority exists, final result is: <%u> with %u votes from %u versions.", 
+                 majority.value.sum, majority.cnt, all_ballots.count());
+      
+      loop over vote_stats with it{
+        IO.println("*** The vote value is <%u>, with %u versions supporting this result", 
+                   it.current.value.sum,  it.current.cnt);
+      }      
+      */
+    } else {
+      IO.println("No majority found!!!");
+    }	
+}
+
+processdef Voter(in queue<Comp_Vector>: v,
+                 in queue<Member_ID>: status_queue,
+                 out uint32: sum,
+                 out queue<Member_ID>: alive_members)
+{
+  var Ballot_Grouping: majority;
+  
+  var queue<Ballot_Grouping>: voting_summary[NUMBER_OF_VERSIONS];
+  
+  state Main{    
+    Majority_Voting(v, majority, voting_summary);    
+    
+	unfold_outputs(majority.value, sum);
+	    
+    alive_members.clear();
+    
+    loop over v with it { 
+        if (comp_ballot(it.current.mem_res, majority.value))
+        { 
+		  alive_members.push(it.current.mem_id);
+        }      
+    }
+
+    v.clear();
+
+    status_queue.clear();
+  }
+}
+
+member_alive(in queue<Member_ID>: alive_members, in Member_ID: id, out bool: alive) {
+
+  alive = false;
+
+  loop over alive_members with it{
+   	if (it.current == id){
+      alive = true;
+      break;
+    }
+  }  
+} 
+
+exec_complete(in queue<Member_ID>: status_queue, in Member_ID: id, out bool: completed) {
+
+  completed = false;
+  
+  loop over status_queue with it{
+   	if (it.current == id){
+      completed = true;
+      break;
+    }
+  } 
+}
+
+
+var uint32: input1 = 12;
+var uint32: output1;
+
+var queue<Replica_In>: input_queue[NUMBER_OF_VERSIONS];
+
+var queue<Comp_Vector>: comp_vectors[NUMBER_OF_VERSIONS];
+
+var queue<Member_ID>: active_members[NUMBER_OF_VERSIONS] = {Member_ID.MV}; 
+
+var queue<Member_ID>: status_queue[NUMBER_OF_VERSIONS];
+
+process Initiator: initiator[100ms](input1, input_queue, active_members);
+
+process Member_Version: mv[][member_alive(active_members, Member_ID.MV)
+                             and (not exec_complete(status_queue, Member_ID.MV))
+                             and input_queue.not_empty()]
+  							(input_queue, Member_ID.MV, comp_vectors, status_queue);
+
+process Voter: voter[][comp_vectors.not_empty() and 
+                        comp_vectors.count() == status_queue.count()]
+                       (comp_vectors, status_queue, output1, active_members); 
+

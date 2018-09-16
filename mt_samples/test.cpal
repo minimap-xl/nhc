@@ -1,0 +1,95 @@
+processdef Original_Process(in uint32: a, 
+                            in uint32: b, 
+                            out uint32: sum, 
+                            out bool: flag)
+{
+  state Main{
+  	sum = a + b;
+    flag =  true;
+	
+	/* Inject a permanent fault at 300ms. */
+	if (self.current_activation >=300ms) 
+	{
+       sum = 100;
+	}
+  }  
+  on (sum > 50) to Faulty;
+
+  state Faulty{
+  }
+  
+}
+
+processdef Mem_1(in uint32: a, 
+                 in uint32: b, 
+                 out uint32: sum, 
+                 out bool: flag)
+{
+  /* The same FSM is used for different 
+  member versions just for demonstration 
+  purpose. Different realisation should 
+  be provided in reality. */	
+	
+  state Main{
+  	sum = a + b;
+    flag =  true;
+  }  
+  on (sum > 50) to Faulty;
+
+  state Faulty{
+  }
+
+}
+
+processdef Mem_2(in uint32: a, 
+                 in uint32: b, 
+                 out uint32: sum, 
+                 out bool: flag)
+{
+  /* The original process becomes 
+  one of the member version. */		
+
+  state Main{
+  	sum = a + b;
+    flag =  true;
+
+	if (self.current_activation >=300ms) 
+	{
+       sum = 100;
+	}
+  }  
+  on (sum > 50) to Faulty;
+
+  state Faulty{
+  }
+}
+
+processdef Mem_3(in uint32: a, 
+                 in uint32: b, 
+                 out uint32: sum, 
+                 out bool: flag)
+{
+  /* The same FSM is used for different 
+  member versions just for demonstration 
+  purpose. Different realisation should 
+  be provided in reality. */	
+
+  state Main{
+  	sum = a + b;
+    flag =  true;
+  }  
+  on (sum > 50) to Faulty;
+
+  state Faulty{
+  }
+
+}
+
+var uint32: input1 = 12;
+var uint32: input2 = 23;
+var uint32: output1;
+var bool: output2;
+
+process Original_Process: p1[100ms](input1, input2, output1, output2);
+
+@dependability:nvp:majority_voter:p1:Mem_1:Mem_2:Mem_3 {}
