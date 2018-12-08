@@ -404,6 +404,17 @@ void NVP_driver(
     assert(mv_template);
     expand_member_version(user_model, mv_template, member_version_list, NULL);
 
+	/* In the subprocess-based NVP skeleton, there is a dummy process
+	 * definition called Dummy_Template to make the NVP skeleton fully
+	 * CPAL compliant. After the expansion of member versions, remove
+	 * that dummy process definition. Even though it is harmless if we
+	 * keep it, it is more elegant we remove it.*/
+#ifdef NVP_SUBPROCESS_IMPL
+	AST *dummy_proc_def = 
+	MT_Find(skeleton, AST_CODE_STATE_MACHINE, "Dummy_Template");
+	MT_Free(dummy_proc_def);
+#endif
+ 
     /* Expand the member version instance as many times as necessary.
     */
     AST *mv_instance =
@@ -428,7 +439,7 @@ void NVP_driver(
        delayed deletion, to be done in post-processing, would be
        better.
     */
-    MT_Free(proc_sm);
+    /* MT_Free(proc_sm);*/ /* TT: commented out by Tingting. For the NVP subprocess we need the original processdef.*/
     MT_Free(global_inst);
 }
 

@@ -161,9 +161,9 @@ $(MAIN_ROOT)/%: $(MAIN_ROOT)/%.c $(FT_LIB) $(MT_LIB) $(DUMP_LIB)	\
 
 DIST_TMPDIR=.
 DIST_ROOT=NHC_Model_Transformation_Release
-DIST_LIST=Makefile include parser/*.[ch] dumper fault_tolerance			\
-model_transform utility main mt_samples/test.cpal mt_pressure_test.sh	\
-README.txt LICENSE
+DIST_LIST=Makefile include parser/*.[ch] dumper fault_tolerance	\
+model_transform utility main mt_samples/test.cpal		\
+mt_samples/demo.cpal mt_pressure_test.sh README.txt LICENSE
 
 dist:
 	rm -rf $(DIST_TMPDIR)/$(DIST_ROOT) $(DIST_ROOT).tar.bz2

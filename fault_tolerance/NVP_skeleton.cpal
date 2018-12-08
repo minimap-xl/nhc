@@ -38,6 +38,11 @@ unfold_outputs(in Replica_Out: c, out uint32: sum)
   sum = c.sum;
 }
 
+processdef Dummy_Template(in uint32: a, out uint32: sum)
+{
+  state Main{
+  } 
+}
 
 processdef Initiator(in uint32: a,
 					 out queue<Replica_In>: inputs, 
@@ -59,6 +64,8 @@ processdef Member_Version(in queue<Replica_In>: input,
                           out queue<Comp_Vector>: output,
                           out queue<Member_ID>: status)
 {
+  process Dummy_Template: subprocess;
+
   var uint32: a;
   var uint32: sum;
 
@@ -72,8 +79,8 @@ processdef Member_Version(in queue<Replica_In>: input,
 
   } 
   
-  state Main{
-
+  state Main {
+    subprocess(a,sum);
   } 
 
   finally{   

@@ -641,6 +641,8 @@ static void expand_mv_local_variable(AST *member_proc_def, AST *member_version, 
 	MT_Free(in_placeholder);
 	MT_Free(out_placeholder);
 }
+
+
 enum list_merge_position {
 	APPEND_TO_TAIL,
 	INSERT_TO_HEAD
@@ -863,7 +865,174 @@ static void mv_rename(AST *placeholder_symbol, AST *user_specific_symbol, AST *f
 	free(unique);
 }
 
+#ifdef NVP_SUBPROCESS_IMPL 
 
+/* This function expands the local variables of the member version in
+ * the NVP skeleton based on both the user provided process defintion
+ * that to be encapsulated in the member versions. */
+static void expand_mv_local_variable_alt(AST *member_proc_def, AST *member_version, AST *ft_tree)
+{
+	AST *default_variable_list;
+	AST *original_param_list;
+	
+	AST *current;
+
+	typeId_t type_spec;
+	AST *var_name;
+	AST *new_var_decl;
+	AST *new_proc_var;
+
+	AST *in_placeholder;
+	AST *out_placeholder;
+
+	default_variable_list = member_version->ast_node_specific.state_machine.var_decl_list;
+
+	original_param_list = member_proc_def->ast_node_specific.state_machine.parameter_list;
+	
+	/* if the original parameter list is not empty, walk through the
+	 * parameter list, create variable declaration with the same type
+	 * and name. */
+	if (NULL != original_param_list)
+	{
+		current = original_param_list->next;
+		
+		while (current != NULL)
+		{
+
+			type_spec = MT_Dup(current->ast_node_specific.param.typeid);
+			var_name = MT_Dup(current->ast_node_specific.param.symbol);
+
+			new_var_decl = defVar_makeDefinition(NULL, VARIABLE_DECL_OP, type_spec, var_name, NULL);
+
+			new_proc_var = defProc_addVariable(NULL, new_var_decl);
+
+			AST_addListLast(NULL, default_variable_list, new_proc_var, 0);	
+
+			current = current->next;
+		}
+	}
+
+	/* Remove the placeholder and adjust the head of the local
+	 * variable list of NVP member version. */
+	in_placeholder = MT_Find(default_variable_list, AST_CODE_VAR_DECL, "a");
+	out_placeholder = MT_Find(default_variable_list, AST_CODE_VAR_DECL, "sum"); 
+
+	/* Walk through the local variable list of the NVP member version,
+	 * unlink the placeholders from the list. This code should work
+	 * regardless where the placeholders are in the list: head,
+	 * middle, or tail of a list. */
+	AST *previous = default_variable_list;
+	current = default_variable_list->next;
+
+	while (current != NULL)
+	{
+		if(current == in_placeholder  || current == out_placeholder)
+		{
+			/* If the current node matches one of the placeholder,
+			 * adjust the previous pointer. */
+			previous->next = current->next;
+		}
+		else
+		{
+			previous = previous->next;
+		}
+
+		current = current->next;
+	}
+
+	/* Free the placeholder. */
+	MT_Free(in_placeholder);
+	MT_Free(out_placeholder);
+}
+
+/* Since the user provided process defintion is invoked in the member
+ * version as a normal function call, we don't need to merge the
+ * subprocess of the template and the user provided process
+ * defintion. Instead, we just need to replace the dummy template name
+ * "Dummy_Template" in the skeleton with the user provided process
+ * definition name. TBD: should tripple check if there is any
+ * subprocess in the user provided process defintion, will we have
+ * nested subprocess or not in the transformed model. If so, what will
+ * be the behavior of nested subprocess? */
+static void mv_inherit_subprocess_alt(AST *member_proc_def, AST *member_version, AST *ft_tree)
+{
+	AST *default_subprocess_list; 
+	AST *subprocess_placeholder;
+	AST *subprocess_default_name;
+	AST *new_name = member_proc_def->ast_node_specific.state_machine.symbol_id;	
+
+	default_subprocess_list = member_version->ast_node_specific.state_machine.subprocess_list;
+	
+	/* Replace the process type placeholder with user provided process
+	 * definition name. */
+	subprocess_placeholder = MT_Find (default_subprocess_list, AST_CODE_PROC_INSTANCE, "Dummy_Template");
+	
+	MT_Rename(subprocess_placeholder, "Dummy_Template", new_name->ast_node_specific.symbol.text);
+
+	subprocess_default_name =  subprocess_placeholder->ast_node_specific.proc_instance.instance_name;
+
+	mv_rename(subprocess_default_name, new_name, NULL);
+}
+
+/* This function expands the common{} and finally{} block of the
+ * member version in the NVP skeleton, based on the user provided
+ * process definition. Since user provided process will run as a
+ * subprocess. We don't need to merge common{} and finally{} block
+ * between the template and the user provided process
+ * definition. Instead, we just need to expand unfold_inputs() and
+ * encapsulate_outputs() functions. */
+static void expand_mv_common_finally_block_alt(AST *member_proc_def, AST *member_version, AST *ft_tree)
+{
+	AST *default_commonfinally_block = NULL;
+
+	/* ---------------- Expand the common block -------------- */
+	/* expand the unfold_inputs() function call based on the parameter
+	 * list of user provided process definition to be used as a member
+	 * version. */
+	AST *param_list = member_proc_def->ast_node_specific.state_machine.parameter_list;
+	default_commonfinally_block = member_version->ast_node_specific.state_machine.common_block;
+
+	expand_process_func_call(param_list, default_commonfinally_block, ArgInType, NULL);
+
+
+	/* ---------------- Expand the finally block ----------------  */
+    /* expand the encapsulated_outputs() function call in the finally{} block. */
+	default_commonfinally_block = member_version->ast_node_specific.state_machine.finally_block;
+
+	expand_process_func_call(param_list, default_commonfinally_block, ArgOutType, NULL);	
+
+}
+
+/* Since user provided process is invoked as a function call in the
+ * member version, we just need to extend the subprocess call with the
+ * parameters of the user provided process definition. And at the end,
+ * we rename the dummy subprocess name as subprocess_XXX, where XXX is
+ * the user provided process definition name. */
+static void expand_mv_fsm_alt(AST *member_proc_def, AST *member_version, AST *ft_tree)
+{
+	AST *param_list = member_proc_def->ast_node_specific.state_machine.parameter_list;
+
+	/* For any CPAL process, there should be at least 1 state, so
+	 * there is no need to check whether the list is NULL or not. */
+	AST *default_fsm = member_version->ast_node_specific.state_machine.state_list;
+
+	expand_process_func_call(param_list, default_fsm, ArgInType, NULL);
+
+	expand_process_func_call(param_list, default_fsm, ArgOutType, NULL);
+
+	AST *subprocess_call = MT_Find(default_fsm, AST_CODE_FUNCTION_CALL, "subprocess");
+
+	AST *subprocess_name = subprocess_call->ast_node_specific.function_call.function_name;
+	AST *new_name = member_proc_def->ast_node_specific.state_machine.symbol_id;	
+	mv_rename(subprocess_name, new_name, NULL);
+}
+
+
+
+#endif /* NVP_SUBPROCESS_IMPL  */
+
+
+#ifndef NVP_SUBPROCESS_IMPL
 /* This function will expand the member version in the NVP skeleton,
  * including local process variables, the common{}, finally{} block,
  * as well as the FSM. In addition, any subprocess declaration, or
@@ -889,6 +1058,36 @@ static void expand_one_member_version(AST *member_proc_def, AST *member_version,
 	mv_process_rename(member_proc_def, member_version, NULL);
 	
 }
+
+#else /* NVP_SUBPROCESS_IMPL is defined */
+
+/* This function will expand the member version in the NVP skeleton,
+ * including local process variables, the common{}, finally{} block,
+ * as well as the FSM. In addition, any subprocess declaration, or
+ * implicit declaration in the user provided model will be inherited
+ * by the member version to not loss any information. */
+static void expand_one_member_version(AST *member_proc_def, AST *member_version, AST *ft_tree)
+{
+	/* Expand the local variable list of the member version template
+	 * based on the user-provided process defintion. */
+	expand_mv_local_variable_alt(member_proc_def, member_version, NULL);
+
+	/* Expand the common{} block and the finally{} block of the member version. */
+	expand_mv_common_finally_block_alt(member_proc_def, member_version, NULL); 
+
+	/* Expand the state machine in the member version */
+	expand_mv_fsm_alt(member_proc_def, member_version, NULL);
+
+	/* Dump the subprocesses in the user provided process defintion. */
+	mv_inherit_subprocess_alt(member_proc_def, member_version, NULL);
+
+	/* Rename the member version as Member_Version_XXX, where XXX is
+	 * the user provided process name, which is unique by default. */
+	mv_process_rename(member_proc_def, member_version, NULL);
+	
+}
+
+#endif /* NVP_SUBPROCESS_IMPL */
 
 /* This function first dumps the member version process definition in
  * the NVP skeleton, and then expands it according to the user
@@ -938,6 +1137,7 @@ void expand_member_version(AST *user_model, AST *template_member_version, AST *d
 
 	
 }
+
 
 /* This function adds a constant declaration for the member ID, and
  * updates the list of initializer of active members. Rename the
@@ -1114,6 +1314,16 @@ void expand_member_version_instance(AST *user_model, AST *template_mv_instance, 
 		initializer_list->next = default_initializer->next;
 		
 		MT_Free(default_initializer);
+
+		/* struct dump_opts dump_opts = { .max_depth = 100 }; */
+		/* fprintf(stderr, "\033[1;31m \n---- the transformed Member_ID enumuration looks like: -------\033[0m\n"); */
+		/* Dump_AST(stderr, enum_member_id, &dump_opts); */
+		/* fprintf(stderr, "-------\n"); */
+		
+		/* fprintf(stderr, "\033[1;31m \n---- the transformed variable active_member looks like: -------\033[0m\n"); */
+		/* Dump_AST(stderr, var_active_member, &dump_opts); */
+		/* fprintf(stderr, "-------\n"); */
+
 	}
 }
 

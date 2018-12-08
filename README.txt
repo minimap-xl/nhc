@@ -49,6 +49,7 @@ follows:
 
 * mt_samples:
   -- test.cpal: the sample user model
+  -- demo.cpal: the temperature controller case study
 
 * fault_tolerance: it contains the MT plugins for fault
   tolerance. Currently, only the plugin for NVP is included in this
@@ -106,14 +107,16 @@ Running the tests
    make clean
    make
 
-3. Run NHC on the sample test program "test.cpal" simply by
+3. Run NHC on the sample programs "test.cpal" and "demo.cpal" simply
+   by
 
    ./mt_pressure_test.sh
 
    It applies NVP transformation based on the dependability annotation
-   specified in "test.cpal", using the "NVP_skeleton.cpal" as the
-   template.  And it generates the NVP-enhanced model and outputs to
-   "mt_test.cpal".
+   specified in "test.cpal" and "demo.cpal", using the
+   "NVP_skeleton.cpal" as the template.  And it generates the
+   NVP-enhanced model and outputs to "mt_test.cpal" and
+   "mt_demo.cpal".
 
 4. Start the CPAL-Editor
 
@@ -126,8 +129,8 @@ Running the tests
 5. Create a workspace using the pull-down menu in the launched
    CPAL-Editor
 
-6. Add test.cpal and mt_test.cpal to the workspace using the pull-down
-   menu under "File"
+6. Add test.cpal, mt_test.cpal, demo.cpal, mt_demo.cpal to the
+   workspace using the pull-down menu under "File".
 
 7. When you save the files, CPAL-Editor will automatically parse the
    models for you. CPAL-Editor offers two views: task view and

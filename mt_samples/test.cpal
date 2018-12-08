@@ -6,18 +6,7 @@ processdef Original_Process(in uint32: a,
   state Main{
   	sum = a + b;
     flag =  true;
-	
-	/* Inject a permanent fault at 300ms. */
-	if (self.current_activation >=300ms) 
-	{
-       sum = 100;
-	}
   }  
-  on (sum > 50) to Faulty;
-
-  state Faulty{
-  }
-  
 }
 
 processdef Mem_1(in uint32: a, 
@@ -25,20 +14,10 @@ processdef Mem_1(in uint32: a,
                  out uint32: sum, 
                  out bool: flag)
 {
-  /* The same FSM is used for different 
-  member versions just for demonstration 
-  purpose. Different realisation should 
-  be provided in reality. */	
-	
   state Main{
   	sum = a + b;
     flag =  true;
   }  
-  on (sum > 50) to Faulty;
-
-  state Faulty{
-  }
-
 }
 
 processdef Mem_2(in uint32: a, 
@@ -46,22 +25,10 @@ processdef Mem_2(in uint32: a,
                  out uint32: sum, 
                  out bool: flag)
 {
-  /* The original process becomes 
-  one of the member version. */		
-
   state Main{
   	sum = a + b;
     flag =  true;
-
-	if (self.current_activation >=300ms) 
-	{
-       sum = 100;
-	}
   }  
-  on (sum > 50) to Faulty;
-
-  state Faulty{
-  }
 }
 
 processdef Mem_3(in uint32: a, 
@@ -69,20 +36,10 @@ processdef Mem_3(in uint32: a,
                  out uint32: sum, 
                  out bool: flag)
 {
-  /* The same FSM is used for different 
-  member versions just for demonstration 
-  purpose. Different realisation should 
-  be provided in reality. */	
-
   state Main{
   	sum = a + b;
     flag =  true;
   }  
-  on (sum > 50) to Faulty;
-
-  state Faulty{
-  }
-
 }
 
 var uint32: input1 = 12;

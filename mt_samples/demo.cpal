@@ -1,0 +1,323 @@
+/* fan pwm speed control */
+var time64: pin_pwm_c10;
+var bool: pin_led_blue = false;
+
+/* c16 input used to read switch position. Forced mode seletion. */
+var bool: pin_gpio_c16_in;
+
+/* c17 ouptut used to indicated switch on position */
+var bool: pin_gpio_c17_out = false;
+
+/* a01 ouptut used to indicated overtemp */
+var     bool: pin_gpio_a01_out = false;
+const time64: MAX_PWM_SPEED = 20ms;
+const time64: COOL_PWM_SPEED = 10ms;
+const time64: IDLE_PWM_SPEED = 0ms;
+
+const uint32: HYSTERESIS_COUNT = 5;
+const float32: TEMP_THRESHOLD = 30.0;
+
+/* Initial temperature at 20 degree */
+var float32: actual_temperature = 20.0;
+var bool: temp_exceeded = false;
+
+processdef TempFilter(
+  in  float32: temperature,
+  out bool: above)
+{
+  static var uint32: hyst_count = 0;
+  state Below {
+    pin_gpio_a01_out = false;
+    above = false;
+  }
+  on (temperature > TEMP_THRESHOLD and hyst_count > HYSTERESIS_COUNT)
+    {
+      hyst_count = 0;
+    }
+    to Above;
+  on (temperature > TEMP_THRESHOLD)
+    {
+      hyst_count = hyst_count + 1;
+    }
+    to Below;
+  on (temperature <= TEMP_THRESHOLD)
+    {
+      hyst_count = 0;
+    }
+    to Below;
+
+  state Above {
+    pin_gpio_a01_out = true;
+    above = true;
+  }
+  on (temperature < TEMP_THRESHOLD and hyst_count > HYSTERESIS_COUNT)
+    {
+      hyst_count = 0;
+    }
+    to Below;
+  on (temperature < TEMP_THRESHOLD)
+    {
+      hyst_count = hyst_count + 1;
+    }
+    to Above;
+  on (temperature >= TEMP_THRESHOLD)
+    {
+      hyst_count = 0;
+    }
+    to Above;
+}
+
+process TempFilter: temperature_filter[500ms](actual_temperature, temp_exceeded);
+
+processdef Monitor1(
+  in  bool: temp_above,
+  in  bool: forced,
+  out time64: fanspeed)
+{
+  state Idle {
+    fanspeed = IDLE_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+
+  state ForcedMode {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (not(forced) and not(temp_above))
+    {
+    }
+    to Cooling;
+  on (not(forced) and temp_above)
+    {
+    }
+    to Heating;
+
+  state Heating {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (not(temp_above))
+    {
+    }
+    to Cooling;
+
+  state Cooling {
+    fanspeed = COOL_PWM_SPEED;
+  }
+  after (10s)
+    {
+    }
+    to Idle;
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+
+}
+
+processdef Monitor2(
+  in  bool: temp_above,
+  in  bool: forced,
+  out time64: fanspeed)
+{
+  state Idle {
+    fanspeed = IDLE_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+
+  state ForcedMode {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (not(forced) and not(temp_above))
+    {
+    }
+    to Cooling;
+  on (not(forced) and temp_above)
+    {
+    }
+    to Heating;
+
+  state Heating {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (not(temp_above))
+    {
+    }
+    to Cooling;
+
+  state Cooling {
+    fanspeed = COOL_PWM_SPEED;
+  }
+  after (10s)
+    {
+    }
+    to Idle;
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+
+  /* Fault injected from 400s onward. */
+  finally {
+    if (self.current_activation > 400s){
+      fanspeed = COOL_PWM_SPEED;
+    }
+  }
+}
+
+processdef Monitor3(
+  in  bool: temp_above,
+  in  bool: forced,
+  out time64: fanspeed)
+{
+  state Idle {
+    fanspeed = IDLE_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+
+  state ForcedMode {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (not(forced) and not(temp_above))
+    {
+    }
+    to Cooling;
+  on (not(forced) and temp_above)
+    {
+    }
+    to Heating;
+
+  state Heating {
+    fanspeed = MAX_PWM_SPEED;
+  }
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (not(temp_above))
+    {
+    }
+    to Cooling;
+
+  state Cooling {
+    fanspeed = COOL_PWM_SPEED;
+  }
+  after (10s)
+    {
+    }
+    to Idle;
+  on (forced)
+    {
+    }
+    to ForcedMode;
+  on (temp_above)
+    {
+    }
+    to Heating;
+}
+
+process Monitor1: mon[100ms](temp_exceeded, pin_gpio_c16_in, pin_pwm_c10);
+
+processdef state_mon(
+  in  bool: sw,
+  out bool: led)
+{
+  state Main {
+    led = sw;
+  }
+
+}
+
+process state_mon: sw_mon[500ms](pin_gpio_c16_in, pin_gpio_c17_out);
+process state_mon: cool_mon[500ms](pin_pwm_c10 == COOL_PWM_SPEED, pin_led_blue);
+
+/* Heatsink model */
+const float32: AMBIENT_TEMP = 20.0;
+/* Sample values
+     0.0005: Light thermal load.  No cooling required in the first 3 minutes.
+     0.005: Moderate load.  Intermittent cooling.
+     0.012: Mid-range load.  Continuous cooling at high/mid speed.
+     0.02:  High load.  Continuous cooling at high speed.
+     0.03:  Even higher load.  The system stabilizes at a higher temperature.
+*/
+var float32: TEMP_IN = 0.03;
+var float32: K0 = 0.01;
+var float32: K1 = 0.03; 
+
+const time64: INT_INTERVAL = 10ms;
+
+const float32: THERMAL_LOAD[5] = {0.0005, 0.005, 0.012, 0.02, 0.03};
+var float32: thermal_load = 0.012;
+
+fanspeed_to_velocity(in time64: fanspeed, out float32: velocity) {
+  velocity = float32.as(fanspeed) / 1.0E9;
+}
+
+processdef Heatsink(in time64: fanspeed, in  float32: temp_in, out float32: temperature) {
+  var float32: k;
+  var time64: int_int;
+  
+  state Main {
+    int_int = self.current_activation - self.previous_activation;
+
+  	k = K0 + K1 * float32.sqrt(fanspeed_to_velocity(fanspeed));
+  	temperature = temperature
+      - k * (temperature - AMBIENT_TEMP) * float32.as(int_int) / 1.0E12
+      + temp_in* float32.as(int_int) / 1.0E10;
+  }
+}
+
+process Heatsink: hs[INT_INTERVAL](pin_pwm_c10, thermal_load, actual_temperature);
+
+@cpal:time:hs{
+  if (time64.time() mod 100s == 0ms) {
+    thermal_load = THERMAL_LOAD.choice_uniform();	 
+  }
+}
+
+@cpal:time {
+   system.sched_policy = Scheduling_Policy.NPFP;
+}
+
+init()
+{
+  /*lowest speed output */
+  pin_pwm_c10 = IDLE_PWM_SPEED;
+}
+
+@dependability:nvp:majority_voter:mon:Monitor1:Monitor2:Monitor3 {}

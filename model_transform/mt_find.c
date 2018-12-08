@@ -51,6 +51,29 @@ static void find_node(AST *node, struct mt_cookie *cookie)
 				else {
 				}
 				break;
+
+			case AST_CODE_PROC_INSTANCE:
+				tmp = node->ast_node_specific.proc_instance.process_type;
+				
+				/* If we find the subprocess instance with the right
+				 * name, return the top level pointer to this AST
+				 * node. */
+				if(strcmp(tmp->ast_node_specific.symbol.text, cookie->search_pattern.search_name)==0)
+				{
+					cookie->search_pattern.found_node = node;
+				}
+
+				tmp = node->ast_node_specific.proc_instance.instance_name;
+				
+				/* If we find the subprocess instance with the right
+				 * name, return the top level pointer to this AST
+				 * node. */
+				if(strcmp(tmp->ast_node_specific.symbol.text, cookie->search_pattern.search_name)==0)
+				{
+					cookie->search_pattern.found_node = node;
+				}
+				
+				break;
 				
 			case AST_CODE_STATE_MACHINE: 
 				tmp = node->ast_node_specific.state_machine.symbol_id;
@@ -98,6 +121,16 @@ static void find_node(AST *node, struct mt_cookie *cookie)
 
 			case AST_CODE_FUNCTION_DEF:
 				tmp = node->ast_node_specific.function_def.symbol_id;
+				if(strcmp(tmp->ast_node_specific.symbol.text, cookie->search_pattern.search_name)==0)
+				{
+					cookie->search_pattern.found_node = node;
+				}
+				else {
+				}
+				break;
+
+			case AST_CODE_FUNCTION_CALL:
+				tmp = node->ast_node_specific.function_call.function_name;
 				if(strcmp(tmp->ast_node_specific.symbol.text, cookie->search_pattern.search_name)==0)
 				{
 					cookie->search_pattern.found_node = node;
